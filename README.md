@@ -8,18 +8,20 @@ A lightweight GNOME/Wayland daemon that displays a keyboard-driven shortcut tree
 - GTK4 via PyGObject
 - GNOME on Wayland
 
-Install GTK bindings if missing:
+Install system dependencies if missing:
 
 ```bash
 # Debian/Ubuntu
-sudo apt install python3-gi python3-gi-cairo gir1.2-gtk-4.0
+sudo apt install python3-gi python3-gi-cairo gir1.2-gtk-4.0 wtype
 
 # Fedora
-sudo dnf install python3-gobject gtk4
+sudo dnf install python3-gobject gtk4 wtype
 
 # Arch
-sudo pacman -S python-gobject gtk4
+sudo pacman -S python-gobject gtk4 wtype
 ```
+
+`wtype` is required for the `text` action (paste text at cursor). `xdotool` is used as a fallback.
 
 ## Installation
 
