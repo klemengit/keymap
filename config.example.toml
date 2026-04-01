@@ -13,7 +13,7 @@
 # Global settings (all optional — defaults shown)
 # ---------------------------------------------------------------------------
 [settings]
-terminal = "gnome-terminal"   # terminal used to open nvim and shell actions
+terminal = "alacritty"        # terminal used to open nvim and shell actions
 font     = "Monospace 13"     # GTK font string (family + size)
 width    = 420                # window width in pixels
 

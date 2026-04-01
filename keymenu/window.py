@@ -415,25 +415,26 @@ class KeymenuWindow(Gtk.ApplicationWindow):
     # ------------------------------------------------------------------
 
     def _open_config_in_editor(self) -> None:
-        terminal = "gnome-terminal"
+        terminal = "alacritty"
         if self._settings is not None:
             terminal = self._settings.terminal
-        try:
-            subprocess.Popen(
-                [terminal, "--", "nvim", str(CONFIG_PATH)],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-        except Exception:
-            # Some terminals use -e instead of --
+        # Try -e first (alacritty, xterm, urxvt, foot, kitty …)
+        # then -- (gnome-terminal, xfce4-terminal …)
+        for args in (
+            [terminal, "-e", "nvim", str(CONFIG_PATH)],
+            [terminal, "--", "nvim", str(CONFIG_PATH)],
+        ):
             try:
-                subprocess.Popen(
-                    [terminal, "-e", "nvim", str(CONFIG_PATH)],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
+                proc = subprocess.Popen(
+                    args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
                 )
+                proc.wait(timeout=0.3)
+                if proc.returncode == 0 or proc.returncode is None:
+                    break
+            except subprocess.TimeoutExpired:
+                break  # still running — success
             except Exception as exc:
-                logger.error("Failed to open config in editor: %s", exc)
+                logger.debug("Terminal launch attempt failed (%s): %s", args, exc)
         self.hide_menu()
 
     def _toggle_help(self) -> None:

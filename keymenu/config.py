@@ -18,7 +18,7 @@ VALID_ACTIONS = frozenset({"url", "app", "shell", "text"})
 
 @dataclass
 class Settings:
-    terminal: str = "gnome-terminal"
+    terminal: str = "alacritty"
     font: str = "Monospace 13"
     width: int = 420
 
