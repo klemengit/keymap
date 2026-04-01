@@ -1,0 +1,18 @@
+[project]
+name = "keymenu"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = []
+
+[project.scripts]
+keymenu = "keymenu.daemon:main"
+keymenu-toggle = "keymenu.toggle:main"
+
+[dependency-groups]
+dev = [
+    "dfview>=0.1.2",
+    "ipykernel>=7.2.0",
+    "jupyter-client>=8.8.0",
+    "jupytext>=1.19.1",
+    "pynvim>=0.6.0",
+]

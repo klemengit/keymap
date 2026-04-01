@@ -1,0 +1,71 @@
+# keymenu example configuration
+# Copy this file to ~/.config/keymenu/config.toml and customize it.
+#
+# Structure:
+#   [settings]           — optional display/behaviour settings
+#   [shortcuts.KEY]      — top-level shortcut (KEY = exactly one character)
+#     label = "..."      — description shown in the menu
+#     action = "..."     — leaf node: url | app | shell | text
+#     value  = "..."     — leaf node: the target
+#     [shortcuts.KEY.shortcuts.SUBKEY]  — nested group
+
+# ---------------------------------------------------------------------------
+# Global settings (all optional — defaults shown)
+# ---------------------------------------------------------------------------
+[settings]
+terminal = "gnome-terminal"   # terminal used to open nvim and shell actions
+font     = "Monospace 13"     # GTK font string (family + size)
+width    = 420                # window width in pixels
+
+# ---------------------------------------------------------------------------
+# Shortcuts
+# ---------------------------------------------------------------------------
+
+# --- Group: GitHub ----------------------------------------------------------
+[shortcuts.g]
+label = "GitHub"
+
+[shortcuts.g.shortcuts.r]
+label  = "My Repo"
+action = "url"
+value  = "https://github.com/username/myrepo"
+
+[shortcuts.g.shortcuts.p]
+label  = "Pull Requests"
+action = "url"
+value  = "https://github.com/pulls"
+
+[shortcuts.g.shortcuts.n]
+label  = "New Issue"
+action = "url"
+value  = "https://github.com/username/myrepo/issues/new"
+
+# --- App shortcuts ----------------------------------------------------------
+[shortcuts.t]
+label  = "Terminal"
+action = "app"
+value  = "kitty"
+# Focus the existing window if kitty is already running; launch otherwise.
+
+[shortcuts.n]
+label  = "Notes (Obsidian)"
+action = "app"
+value  = "obsidian"
+
+# --- Shell shortcuts --------------------------------------------------------
+[shortcuts.s]
+label  = "Search the Web"
+action = "shell"
+value  = "xdg-open 'https://google.com'"
+
+[shortcuts.h]
+label  = "Open Home Folder"
+action = "shell"
+value  = "nautilus ~"
+
+# --- Text (paste) shortcuts -------------------------------------------------
+[shortcuts.p]
+label  = "Paste Email Signature"
+action = "text"
+value  = "Jane Doe\njane@example.com\n+1 555 0100"
+# The window hides first, then the text is typed at the cursor after 150 ms.
