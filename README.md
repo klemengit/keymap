@@ -12,16 +12,16 @@ Install system dependencies if missing:
 
 ```bash
 # Debian/Ubuntu
-sudo apt install python3-gi python3-gi-cairo gir1.2-gtk-4.0 wtype
+sudo apt install python3-gi python3-gi-cairo gir1.2-gtk-4.0 wl-clipboard
 
 # Fedora
-sudo dnf install python3-gobject gtk4 wtype
+sudo dnf install python3-gobject gtk4 wl-clipboard
 
 # Arch
-sudo pacman -S python-gobject gtk4 wtype
+sudo pacman -S python-gobject gtk4 wl-clipboard
 ```
 
-`wtype` is required for the `text` action (paste text at cursor). `xdotool` is used as a fallback.
+`wl-clipboard` is required for the `text` action (copies text to clipboard). `xdotool` is used as a fallback on X11.
 
 ## Installation
 
@@ -96,7 +96,7 @@ value  = "Jane Doe\njane@example.com"
 | `url` | Opens URL via `xdg-open`. Best-effort GNOME focus of the browser window. |
 | `app` | Focus the app if already running, otherwise launch it. |
 | `shell` | Run a shell command (non-blocking subprocess). |
-| `text` | Type text at cursor via `wtype`/`xdotool` after a 150ms delay. |
+| `text` | Copy text to clipboard via `wl-copy` (GNOME/Wayland). Falls back to `xdotool` on X11. |
 
 ## Changing the hotkey
 

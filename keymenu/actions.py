@@ -175,13 +175,18 @@ def execute_text(value: str, hide_callback: "Callable[[], None] | None" = None) 
 
     def _type() -> None:
         try:
-            if shutil.which("wtype") is not None:
-                subprocess.Popen(
-                    ["wtype", value],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
+            # On GNOME/Wayland wtype doesn't work (no virtual-keyboard protocol).
+            # Copy to clipboard with wl-copy instead — reliable on all Wayland compositors.
+            if shutil.which("wl-copy") is not None:
+                proc = subprocess.run(
+                    ["wl-copy", "--", value],
+                    capture_output=True,
                 )
-            elif shutil.which("xdotool") is not None:
+                if proc.returncode == 0:
+                    logger.debug("text action: copied to clipboard via wl-copy")
+                    return
+            # Fallback: xdotool for X11 / XWayland
+            if shutil.which("xdotool") is not None:
                 subprocess.Popen(
                     ["xdotool", "type", "--clearmodifiers", "--", value],
                     stdout=subprocess.DEVNULL,
@@ -189,7 +194,7 @@ def execute_text(value: str, hide_callback: "Callable[[], None] | None" = None) 
                 )
             else:
                 logger.error(
-                    "text action: neither 'wtype' nor 'xdotool' is installed"
+                    "text action: neither 'wl-copy' nor 'xdotool' is installed"
                 )
         except Exception as exc:
             logger.error("text action failed: %s", exc)
