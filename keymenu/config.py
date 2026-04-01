@@ -54,15 +54,13 @@ def _parse_node(key: str, data: dict, path: str) -> ShortcutNode:
     if not isinstance(label, str):
         raise ConfigError(f"'label' must be a string at {path}")
 
-    has_action = "action" in data
-    has_value = "value" in data
-    has_shortcuts = "shortcuts" in data
+    _RESERVED = {"label", "action", "value"}
 
-    if has_action or has_value:
+    if "action" in data or "value" in data:
         # Leaf node
-        if not has_action:
+        if "action" not in data:
             raise ConfigError(f"Leaf node missing 'action' at {path}")
-        if not has_value:
+        if "value" not in data:
             raise ConfigError(f"Leaf node missing 'value' at {path}")
         action = data["action"]
         if action not in VALID_ACTIONS:
@@ -75,30 +73,20 @@ def _parse_node(key: str, data: dict, path: str) -> ShortcutNode:
             raise ConfigError(f"'value' must be a string at {path}")
         return ShortcutLeaf(label=label, action=action, value=value)
 
-    elif has_shortcuts:
-        # Group node
-        raw_shortcuts = data["shortcuts"]
-        if not isinstance(raw_shortcuts, dict):
-            raise ConfigError(f"'shortcuts' must be a table at {path}")
-        if not raw_shortcuts:
-            raise ConfigError(f"Group node must have at least one child at {path}")
-
-        children: dict[str, ShortcutNode] = {}
-        for child_key, child_data in raw_shortcuts.items():
-            child_path = f"{path}.shortcuts.{child_key}"
-            if not isinstance(child_data, dict):
-                raise ConfigError(
-                    f"Shortcut entry must be a table at {child_path}"
-                )
-            children[child_key] = _parse_node(child_key, child_data, child_path)
-
-        return ShortcutGroup(label=label, shortcuts=children)
-
-    else:
+    # Group node — children are single-character sub-keys
+    children: dict[str, ShortcutNode] = {
+        k: v for k, v in data.items() if k not in _RESERVED and isinstance(v, dict)
+    }
+    if not children:
         raise ConfigError(
             f"Node at {path} is neither a leaf (missing 'action'+'value') "
-            "nor a group (missing 'shortcuts')"
+            "nor a group (no single-character child tables found)"
         )
+    result: dict[str, ShortcutNode] = {}
+    for child_key, child_data in children.items():
+        child_path = f"{path}.{child_key}"
+        result[child_key] = _parse_node(child_key, child_data, child_path)
+    return ShortcutGroup(label=label, shortcuts=result)
 
 
 def _parse_settings(raw: dict) -> Settings:

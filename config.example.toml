@@ -7,7 +7,7 @@
 #     label = "..."      — description shown in the menu
 #     action = "..."     — leaf node: url | app | shell | text
 #     value  = "..."     — leaf node: the target
-#     [shortcuts.KEY.shortcuts.SUBKEY]  — nested group
+#   [shortcuts.KEY.SUBKEY]  — nested group (no extra 'shortcuts' wrapper needed)
 
 # ---------------------------------------------------------------------------
 # Global settings (all optional — defaults shown)
@@ -25,17 +25,17 @@ width    = 420                # window width in pixels
 [shortcuts.g]
 label = "GitHub"
 
-[shortcuts.g.shortcuts.r]
+[shortcuts.g.r]
 label  = "My Repo"
 action = "url"
 value  = "https://github.com/username/myrepo"
 
-[shortcuts.g.shortcuts.p]
+[shortcuts.g.p]
 label  = "Pull Requests"
 action = "url"
 value  = "https://github.com/pulls"
 
-[shortcuts.g.shortcuts.n]
+[shortcuts.g.n]
 label  = "New Issue"
 action = "url"
 value  = "https://github.com/username/myrepo/issues/new"

@@ -127,17 +127,17 @@ width = 420                   # window width in pixels (optional, default 420)
 label = "GitHub"
 # No action = this is a group; define children below
 
-[shortcuts.g.shortcuts.r]
+[shortcuts.g.r]
 label = "My Repo"
 action = "url"
 value = "https://github.com/username/myrepo"
 
-[shortcuts.g.shortcuts.p]
+[shortcuts.g.p]
 label = "Pull Requests"
 action = "url"
 value = "https://github.com/pulls"
 
-[shortcuts.g.shortcuts.n]
+[shortcuts.g.n]
 label = "New Issue"
 action = "url"
 value = "https://github.com/username/myrepo/issues/new"
