@@ -567,8 +567,8 @@ class KeymenuWindow(Gtk.ApplicationWindow):
         node = self._current_shortcuts.get(char)
 
         if node is None:
-            # Unknown key — flash the window border briefly
-            self._flash_error()
+            # Unknown key — enter search with this character as the initial query
+            self._enter_search_mode(initial_query=char)
             return True
 
         if isinstance(node, ShortcutGroup):
@@ -662,9 +662,9 @@ class KeymenuWindow(Gtk.ApplicationWindow):
     # Fuzzy search
     # ------------------------------------------------------------------
 
-    def _enter_search_mode(self) -> None:
+    def _enter_search_mode(self, initial_query: str = "") -> None:
         self._search_mode = True
-        self._search_query = ""
+        self._search_query = initial_query
         self._search_selected = 0
         self._build_search_results()
         self._refresh_search_content()
