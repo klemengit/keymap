@@ -30,6 +30,8 @@ class Settings:
     terminal: str = "alacritty"
     font: str = "Monospace 13"
     width: int = 420
+    desktop_apps: bool = True
+    exclude_apps: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -116,6 +118,16 @@ def _parse_settings(raw: dict) -> Settings:
         if not isinstance(v, int):
             raise ConfigError("settings.width must be an integer")
         settings.width = v
+    if "desktop_apps" in raw:
+        v = raw["desktop_apps"]
+        if not isinstance(v, bool):
+            raise ConfigError("settings.desktop_apps must be a boolean")
+        settings.desktop_apps = v
+    if "exclude_apps" in raw:
+        v = raw["exclude_apps"]
+        if not isinstance(v, list) or not all(isinstance(s, str) for s in v):
+            raise ConfigError("settings.exclude_apps must be a list of strings")
+        settings.exclude_apps = v
     return settings
 
 

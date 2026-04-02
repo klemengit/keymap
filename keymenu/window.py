@@ -7,6 +7,7 @@ and recreated. Config is reloaded on every show_menu() call.
 from __future__ import annotations
 
 import logging
+import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -185,6 +186,84 @@ def _flatten_shortcuts(
 
 
 # ---------------------------------------------------------------------------
+# Desktop app discovery
+# ---------------------------------------------------------------------------
+
+_DESKTOP_DIRS = [
+    Path("/usr/share/applications"),
+    Path("/usr/local/share/applications"),
+    Path.home() / ".local/share/applications",
+]
+
+_FIELD_CODE_RE = re.compile(r"%[fFuUdDnNickvmI]")
+
+
+def _parse_desktop_file(path: Path) -> "_SearchItem | None":
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+
+    data: dict[str, str] = {}
+    in_section = False
+    for line in text.splitlines():
+        line = line.strip()
+        if line.startswith("["):
+            in_section = line == "[Desktop Entry]"
+            continue
+        if not in_section or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key = key.strip()
+        if "[" not in key:  # ignore localized variants like Name[de]=
+            data.setdefault(key, value.strip())
+
+    if data.get("Type") != "Application":
+        return None
+    if data.get("NoDisplay", "false").lower() == "true":
+        return None
+    if data.get("Hidden", "false").lower() == "true":
+        return None
+
+    name = data.get("Name", "").strip()
+    exec_val = data.get("Exec", "").strip()
+    if not name or not exec_val:
+        return None
+
+    exec_clean = _FIELD_CODE_RE.sub("", exec_val).strip()
+    if not exec_clean:
+        return None
+
+    return _SearchItem(label=name, action="shell", value=exec_clean, key_path="")
+
+
+def _load_desktop_apps(exclude: "list[str]") -> "list[_SearchItem]":
+    """Scan XDG application dirs and return one _SearchItem per installed app.
+
+    User dirs (~/.local) are scanned last and take priority on name conflicts.
+    Items matching any entry in *exclude* (by Name or filename stem,
+    case-insensitive) are omitted.
+    """
+    exclude_lower = {e.lower() for e in exclude}
+    seen: dict[str, _SearchItem] = {}  # name → item; later dirs win
+
+    for d in _DESKTOP_DIRS:
+        if not d.is_dir():
+            continue
+        for desktop_file in sorted(d.glob("*.desktop")):
+            if desktop_file.stem.lower() in exclude_lower:
+                continue
+            item = _parse_desktop_file(desktop_file)
+            if item is None:
+                continue
+            if item.label.lower() in exclude_lower:
+                continue
+            seen[item.label] = item  # override: user-installed wins
+
+    return sorted(seen.values(), key=lambda x: x.label.lower())
+
+
+# ---------------------------------------------------------------------------
 # Main window class
 # ---------------------------------------------------------------------------
 
@@ -207,6 +286,7 @@ class KeymenuWindow(Gtk.ApplicationWindow):
 
         # Fuzzy search state
         self._commands: "list[Command]" = []
+        self._app_items: list[_SearchItem] = []
         self._search_mode = False
         self._search_query = ""
         self._search_results: list[_SearchItem] = []
@@ -596,32 +676,38 @@ class KeymenuWindow(Gtk.ApplicationWindow):
         self._refresh_content()
 
     def _build_search_results(self) -> None:
-        """Compute and rank search results for the current query."""
-        candidates: list[_SearchItem] = []
-        candidates.extend(_flatten_shortcuts(self._shortcuts_tree))
-        for cmd in self._commands:
-            candidates.append(
-                _SearchItem(
-                    label=cmd.label,
-                    action=cmd.action,
-                    value=cmd.value,
-                    key_path="",
-                )
-            )
+        """Compute and rank search results for the current query.
+
+        Priority: shortcuts → commands → desktop apps.
+        Within each tier items are ranked by fuzzy score descending.
+        """
+        command_items = [
+            _SearchItem(c.label, c.action, c.value, "")
+            for c in self._commands
+        ]
+        tiers = [
+            _flatten_shortcuts(self._shortcuts_tree),
+            command_items,
+            self._app_items,
+        ]
 
         query = self._search_query
-        if query:
-            scored = [
-                (item, _fuzzy_score(query, item.label))
-                for item in candidates
-            ]
-            self._search_results = [
-                item
-                for item, score in sorted(scored, key=lambda x: -x[1])
-                if score > 0
-            ]
-        else:
-            self._search_results = candidates
+        results: list[_SearchItem] = []
+        for candidates in tiers:
+            if query:
+                scored = [
+                    (item, _fuzzy_score(query, item.label))
+                    for item in candidates
+                ]
+                results.extend(
+                    item
+                    for item, score in sorted(scored, key=lambda x: -x[1])
+                    if score > 0
+                )
+            else:
+                results.extend(candidates)
+
+        self._search_results = results
 
         # Clamp selection
         if self._search_selected >= len(self._search_results):
@@ -737,6 +823,11 @@ class KeymenuWindow(Gtk.ApplicationWindow):
         self._search_query = ""
         self._search_results = []
         self._search_selected = 0
+
+        if settings is not None and settings.desktop_apps:
+            self._app_items = _load_desktop_apps(settings.exclude_apps)
+        else:
+            self._app_items = []
 
         self._refresh_content()
 
