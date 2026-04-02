@@ -54,7 +54,7 @@ Start the daemon immediately (no logout required):
 | Any other key | Open fuzzy search pre-filled with that character |
 | `/` | Open fuzzy search (empty) |
 | `Esc` / `Backspace` | Go back one level; close at root |
-| `e` (or `Ctrl+E`) | Open config in nvim |
+| `Ctrl+E` | Open config in nvim |
 | `?` | Show help overlay |
 
 ## Fuzzy Search

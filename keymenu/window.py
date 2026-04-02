@@ -383,7 +383,7 @@ class KeymenuWindow(Gtk.ApplicationWindow):
         self._main_box.append(sep2)
 
         # Footer
-        self._footer = Gtk.Label(label="?  help    /  search    Esc  back/close    e  edit config")
+        self._footer = Gtk.Label(label="?  help    /  search    Esc  back/close    Ctrl+E  edit config")
         self._footer.set_halign(Gtk.Align.START)
         self._footer.add_css_class("keymenu-footer")
         self._main_box.append(self._footer)
@@ -416,9 +416,10 @@ class KeymenuWindow(Gtk.ApplicationWindow):
 
         rows = [
             ("Any key", "Navigate / execute shortcut"),
+            ("Unmatched key", "Open fuzzy search with that character"),
             ("Esc / Backspace", "Go up one level; close if at root"),
-            ("/", "Open fuzzy search"),
-            ("e / Ctrl+E", "Edit config in nvim"),
+            ("/", "Open fuzzy search (empty)"),
+            ("Ctrl+E", "Edit config in nvim"),
             ("?", "Toggle this help overlay"),
         ]
         for key_text, desc in rows:
@@ -501,12 +502,7 @@ class KeymenuWindow(Gtk.ApplicationWindow):
 
             self._list_box.append(row)
 
-        # Update footer to show whether 'e' is taken
-        e_taken = "e" in self._current_shortcuts
-        edit_hint = "Ctrl+E" if e_taken else "e"
-        self._footer.set_text(
-            f"?  help    /  search    Esc  back/close    {edit_hint}  edit config"
-        )
+        self._footer.set_text("?  help    /  search    Esc  back/close    Ctrl+E  edit config")
 
     # ------------------------------------------------------------------
     # Key handling
@@ -553,9 +549,9 @@ class KeymenuWindow(Gtk.ApplicationWindow):
             self._enter_search_mode()
             return True
 
-        # Edit config: Ctrl+E always works; plain 'e' only if not a shortcut
-        e_taken = "e" in self._current_shortcuts
-        if keyval == Gdk.KEY_e and (ctrl or not e_taken):
+        # Edit config: Ctrl+E only. Plain 'e' falls through to shortcut lookup
+        # (navigates if 'e' is a shortcut, enters search otherwise).
+        if keyval == Gdk.KEY_e and ctrl:
             self._open_config_in_editor()
             return True
 
