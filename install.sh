@@ -6,7 +6,7 @@ set -euo pipefail
 # ---------------------------------------------------------------------------
 # Configuration — change these if you want a different hotkey
 # ---------------------------------------------------------------------------
-HOTKEY="<Super>k"
+HOTKEY="<Alt>space"
 HOTKEY_NAME="keymenu"
 KEYBINDING_PATH="/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/keymenu/"
 

@@ -8,6 +8,10 @@
 #     action = "..."     — leaf node: url | app | shell | text
 #     value  = "..."     — leaf node: the target
 #   [shortcuts.KEY.SUBKEY]  — nested group (no extra 'shortcuts' wrapper needed)
+#   [[commands]]         — named actions without a shortcut; accessible via / fuzzy search
+#     label  = "..."     — name shown in search results
+#     action = "..."     — url | app | shell | text
+#     value  = "..."     — the target
 
 # ---------------------------------------------------------------------------
 # Global settings (all optional — defaults shown)
@@ -69,3 +73,33 @@ label  = "Paste Email Signature"
 action = "text"
 value  = "Jane Doe\njane@example.com\n+1 555 0100"
 # The window hides first, then the text is typed at the cursor after 150 ms.
+
+# ---------------------------------------------------------------------------
+# Commands — no shortcut key; accessible via / fuzzy search
+# Add as many [[commands]] blocks as you like.
+# ---------------------------------------------------------------------------
+
+[[commands]]
+label  = "Hacker News"
+action = "url"
+value  = "https://news.ycombinator.com"
+
+[[commands]]
+label  = "Lobsters"
+action = "url"
+value  = "https://lobste.rs"
+
+[[commands]]
+label  = "Restart NetworkManager"
+action = "shell"
+value  = "sudo systemctl restart NetworkManager"
+
+[[commands]]
+label  = "Screenshot (area)"
+action = "shell"
+value  = "gnome-screenshot -a"
+
+[[commands]]
+label  = "My work email"
+action = "text"
+value  = "jane@example.com"

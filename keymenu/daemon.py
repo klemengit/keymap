@@ -56,7 +56,7 @@ logger = logging.getLogger("keymenu.daemon")
 
 _window: KeymenuWindow | None = None
 _window_visible = False
-_last_valid_config: tuple | None = None  # (settings, tree)
+_last_valid_config: tuple | None = None  # (settings, tree, commands)
 
 
 # ---------------------------------------------------------------------------
@@ -104,8 +104,8 @@ def _handle_toggle() -> bool:
         if config is None:
             logger.error("No valid config available — cannot show window")
             return GLib.SOURCE_REMOVE
-        settings, tree = config
-        _window.show_menu(tree, settings)
+        settings, tree, commands = config
+        _window.show_menu(tree, settings, commands)
         _window_visible = True
 
     return GLib.SOURCE_REMOVE

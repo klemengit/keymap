@@ -17,6 +17,15 @@ VALID_ACTIONS = frozenset({"url", "app", "shell", "text"})
 
 
 @dataclass
+class Command:
+    """A named action without a shortcut key — searchable via fuzzy find."""
+
+    label: str
+    action: str  # 'url' | 'app' | 'shell' | 'text'
+    value: str
+
+
+@dataclass
 class Settings:
     terminal: str = "alacritty"
     font: str = "Monospace 13"
@@ -110,14 +119,43 @@ def _parse_settings(raw: dict) -> Settings:
     return settings
 
 
+def _parse_commands(raw_commands: list) -> list[Command]:
+    """Parse the [[commands]] array-of-tables section."""
+    if not isinstance(raw_commands, list):
+        raise ConfigError("'commands' must be an array of tables ([[commands]])")
+    commands: list[Command] = []
+    for i, cmd in enumerate(raw_commands):
+        loc = f"commands[{i}]"
+        if not isinstance(cmd, dict):
+            raise ConfigError(f"Each command must be a table at {loc}")
+        for required in ("label", "action", "value"):
+            if required not in cmd:
+                raise ConfigError(f"Command missing '{required}' at {loc}")
+        label = cmd["label"]
+        action = cmd["action"]
+        value = cmd["value"]
+        if not isinstance(label, str):
+            raise ConfigError(f"'label' must be a string at {loc}")
+        if not isinstance(action, str) or action not in VALID_ACTIONS:
+            raise ConfigError(
+                f"Unknown action '{action}' at {loc}. "
+                f"Valid actions: {', '.join(sorted(VALID_ACTIONS))}"
+            )
+        if not isinstance(value, str):
+            raise ConfigError(f"'value' must be a string at {loc}")
+        commands.append(Command(label=label, action=action, value=value))
+    return commands
+
+
 def load_config(
     path: Path = CONFIG_PATH,
-) -> tuple[Settings, dict[str, ShortcutNode]]:
+) -> tuple[Settings, dict[str, ShortcutNode], list[Command]]:
     """Load and validate the keymenu config file.
 
     Returns:
-        A tuple of (Settings, shortcuts_tree) where shortcuts_tree maps
-        single-character keys to ShortcutNode instances.
+        A tuple of (Settings, shortcuts_tree, commands) where shortcuts_tree
+        maps single-character keys to ShortcutNode instances, and commands is
+        a list of named actions accessible via fuzzy search (no shortcut key).
 
     Raises:
         ConfigError: if the file is missing, unparseable, or invalid.
@@ -147,4 +185,6 @@ def load_config(
             raise ConfigError(f"Shortcut entry must be a table at {node_path}")
         tree[key] = _parse_node(key, data, node_path)
 
-    return settings, tree
+    commands = _parse_commands(raw.get("commands", []))
+
+    return settings, tree, commands

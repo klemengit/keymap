@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import subprocess
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -18,7 +19,7 @@ gi.require_version("Pango", "1.0")
 from gi.repository import GLib, Gtk, Gdk, Pango  # noqa: E402
 
 if TYPE_CHECKING:
-    from keymenu.config import Settings, ShortcutNode
+    from keymenu.config import Command, Settings, ShortcutNode
 
 logger = logging.getLogger("keymenu.window")
 
@@ -104,7 +105,83 @@ window {
     padding: 8px;
     margin: 4px;
 }
+
+.keymenu-search-query {
+    color: #cba6f7;
+    font-weight: bold;
+    padding: 6px 12px 2px 12px;
+}
+
+.keymenu-search-selected {
+    background-color: #313244;
+    border-radius: 4px;
+}
+
+.keymenu-key-path {
+    color: #585b70;
+    font-size: 0.8em;
+    padding-left: 8px;
+}
 """
+
+
+# ---------------------------------------------------------------------------
+# Fuzzy search helpers
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class _SearchItem:
+    label: str
+    action: str
+    value: str
+    key_path: str  # e.g. "g›r" for shortcuts, "" for commands
+
+
+def _fuzzy_score(query: str, text: str) -> int:
+    """Return a match score > 0 if all query chars appear in order in text."""
+    if not query:
+        return 1
+    q = query.lower()
+    t = text.lower()
+    score = 0
+    qi = 0
+    last_i = -2
+    for i, c in enumerate(t):
+        if qi >= len(q):
+            break
+        if c == q[qi]:
+            score += 2
+            if i == last_i + 1:
+                score += 3  # consecutive bonus
+            if i == 0 or t[i - 1] in " >_-./\\":
+                score += 3  # word-boundary bonus
+            last_i = i
+            qi += 1
+    return score if qi == len(q) else 0
+
+
+def _flatten_shortcuts(
+    tree: "dict[str, ShortcutNode]", key_path: str = ""
+) -> list[_SearchItem]:
+    """Recursively collect all leaf nodes from the shortcut tree."""
+    from keymenu.config import ShortcutGroup, ShortcutLeaf
+
+    items: list[_SearchItem] = []
+    for key, node in tree.items():
+        path = f"{key_path}›{key}" if key_path else key
+        if isinstance(node, ShortcutLeaf):
+            items.append(
+                _SearchItem(
+                    label=node.label,
+                    action=node.action,
+                    value=node.value,
+                    key_path=path,
+                )
+            )
+        elif isinstance(node, ShortcutGroup):
+            items.extend(_flatten_shortcuts(node.shortcuts, path))
+    return items
 
 
 # ---------------------------------------------------------------------------
@@ -127,6 +204,13 @@ class KeymenuWindow(Gtk.ApplicationWindow):
         self._fade_timer_id: int | None = None
         # Optional callback invoked after the window finishes hiding
         self.on_hidden: "Callable[[], None] | None" = None  # noqa: F821
+
+        # Fuzzy search state
+        self._commands: "list[Command]" = []
+        self._search_mode = False
+        self._search_query = ""
+        self._search_results: list[_SearchItem] = []
+        self._search_selected = 0
 
         self._setup_css()
         self._setup_window()
@@ -216,7 +300,7 @@ class KeymenuWindow(Gtk.ApplicationWindow):
         self._main_box.append(sep2)
 
         # Footer
-        self._footer = Gtk.Label(label="?  help    Esc  back/close    e  edit config")
+        self._footer = Gtk.Label(label="?  help    /  search    Esc  back/close    e  edit config")
         self._footer.set_halign(Gtk.Align.START)
         self._footer.add_css_class("keymenu-footer")
         self._main_box.append(self._footer)
@@ -250,6 +334,7 @@ class KeymenuWindow(Gtk.ApplicationWindow):
         rows = [
             ("Any key", "Navigate / execute shortcut"),
             ("Esc / Backspace", "Go up one level; close if at root"),
+            ("/", "Open fuzzy search"),
             ("e / Ctrl+E", "Edit config in nvim"),
             ("?", "Toggle this help overlay"),
         ]
@@ -337,7 +422,7 @@ class KeymenuWindow(Gtk.ApplicationWindow):
         e_taken = "e" in self._current_shortcuts
         edit_hint = "Ctrl+E" if e_taken else "e"
         self._footer.set_text(
-            f"?  help    Esc  back/close    {edit_hint}  edit config"
+            f"?  help    /  search    Esc  back/close    {edit_hint}  edit config"
         )
 
     # ------------------------------------------------------------------
@@ -361,6 +446,10 @@ class KeymenuWindow(Gtk.ApplicationWindow):
 
         ctrl = bool(state & Gdk.ModifierType.CONTROL_MASK)
 
+        # --- Search mode: route all keys to search handler ---
+        if self._search_mode:
+            return self._handle_search_key(keyval)
+
         # Escape / Backspace: go up or close
         if keyval in (Gdk.KEY_Escape, Gdk.KEY_BackSpace):
             if self._nav_stack:
@@ -374,6 +463,11 @@ class KeymenuWindow(Gtk.ApplicationWindow):
         # Help toggle
         if keyval == Gdk.KEY_question:
             self._toggle_help()
+            return True
+
+        # Search trigger: / (always reserved, like ?)
+        if keyval == Gdk.KEY_slash:
+            self._enter_search_mode()
             return True
 
         # Edit config: Ctrl+E always works; plain 'e' only if not a shortcut
@@ -410,6 +504,46 @@ class KeymenuWindow(Gtk.ApplicationWindow):
 
         return False
 
+    def _handle_search_key(self, keyval: int) -> bool:
+        if keyval == Gdk.KEY_Escape:
+            self._exit_search_mode()
+            return True
+
+        if keyval in (Gdk.KEY_Return, Gdk.KEY_KP_Enter):
+            self._execute_search_selection()
+            return True
+
+        if keyval == Gdk.KEY_Up:
+            if self._search_selected > 0:
+                self._search_selected -= 1
+                self._refresh_search_content()
+            return True
+
+        if keyval == Gdk.KEY_Down:
+            if self._search_results and self._search_selected < len(self._search_results) - 1:
+                self._search_selected += 1
+                self._refresh_search_content()
+            return True
+
+        if keyval == Gdk.KEY_BackSpace:
+            if self._search_query:
+                self._search_query = self._search_query[:-1]
+                self._search_selected = 0
+                self._build_search_results()
+                self._refresh_search_content()
+            return True
+
+        # Printable character: append to query
+        char = chr(keyval) if 32 <= keyval <= 126 else None
+        if char is not None:
+            self._search_query += char
+            self._search_selected = 0
+            self._build_search_results()
+            self._refresh_search_content()
+            return True
+
+        return False
+
     # ------------------------------------------------------------------
     # Navigation helpers
     # ------------------------------------------------------------------
@@ -442,6 +576,132 @@ class KeymenuWindow(Gtk.ApplicationWindow):
         self._help_widget.set_visible(self._help_visible)
 
     # ------------------------------------------------------------------
+    # Fuzzy search
+    # ------------------------------------------------------------------
+
+    def _enter_search_mode(self) -> None:
+        self._search_mode = True
+        self._search_query = ""
+        self._search_selected = 0
+        self._build_search_results()
+        self._refresh_search_content()
+
+    def _exit_search_mode(self) -> None:
+        self._search_mode = False
+        self._search_query = ""
+        self._search_results = []
+        self._search_selected = 0
+        self._breadcrumb.remove_css_class("keymenu-search-query")
+        self._breadcrumb.add_css_class("keymenu-breadcrumb")
+        self._refresh_content()
+
+    def _build_search_results(self) -> None:
+        """Compute and rank search results for the current query."""
+        candidates: list[_SearchItem] = []
+        candidates.extend(_flatten_shortcuts(self._shortcuts_tree))
+        for cmd in self._commands:
+            candidates.append(
+                _SearchItem(
+                    label=cmd.label,
+                    action=cmd.action,
+                    value=cmd.value,
+                    key_path="",
+                )
+            )
+
+        query = self._search_query
+        if query:
+            scored = [
+                (item, _fuzzy_score(query, item.label))
+                for item in candidates
+            ]
+            self._search_results = [
+                item
+                for item, score in sorted(scored, key=lambda x: -x[1])
+                if score > 0
+            ]
+        else:
+            self._search_results = candidates
+
+        # Clamp selection
+        if self._search_selected >= len(self._search_results):
+            self._search_selected = max(0, len(self._search_results) - 1)
+
+    def _refresh_search_content(self) -> None:
+        """Rebuild the list box to show current search results."""
+        while True:
+            child = self._list_box.get_first_child()
+            if child is None:
+                break
+            self._list_box.remove(child)
+
+        # Show query in breadcrumb area
+        cursor = "▋"
+        self._breadcrumb.remove_css_class("keymenu-breadcrumb")
+        self._breadcrumb.add_css_class("keymenu-search-query")
+        self._breadcrumb.set_text(f"/ {self._search_query}{cursor}")
+
+        if not self._search_results:
+            no_match = Gtk.Label(label="no results")
+            no_match.add_css_class("keymenu-footer")
+            no_match.set_halign(Gtk.Align.CENTER)
+            no_match.set_margin_top(8)
+            no_match.set_margin_bottom(8)
+            self._list_box.append(no_match)
+        else:
+            for i, item in enumerate(self._search_results):
+                row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
+                row.add_css_class("keymenu-row")
+                row.set_margin_top(2)
+                row.set_margin_bottom(2)
+                if i == self._search_selected:
+                    row.add_css_class("keymenu-search-selected")
+
+                # Selection indicator
+                sel_label = Gtk.Label(label="›" if i == self._search_selected else " ")
+                sel_label.add_css_class("keymenu-group-indicator")
+                sel_label.set_halign(Gtk.Align.CENTER)
+                sel_label.set_valign(Gtk.Align.CENTER)
+                row.append(sel_label)
+
+                # Item label
+                desc = Gtk.Label(label=item.label)
+                desc.add_css_class("keymenu-label")
+                desc.set_halign(Gtk.Align.START)
+                desc.set_hexpand(True)
+                row.append(desc)
+
+                # Key path hint for shortcuts
+                if item.key_path:
+                    kp = Gtk.Label(label=item.key_path)
+                    kp.add_css_class("keymenu-key-path")
+                    kp.set_halign(Gtk.Align.END)
+                    row.append(kp)
+
+                # Action badge
+                badge = Gtk.Label(label=f"[{item.action}]")
+                badge.add_css_class("keymenu-help-action")
+                badge.set_halign(Gtk.Align.END)
+                row.append(badge)
+
+                self._list_box.append(row)
+
+        self._footer.set_text("Enter  execute    ↑↓  navigate    Esc  cancel search")
+
+    def _execute_search_selection(self) -> None:
+        if not self._search_results:
+            return
+        item = self._search_results[self._search_selected]
+        from keymenu.actions import execute_action
+
+        self._exit_search_mode()
+        if item.action == "text":
+            execute_action(item.action, item.value, hide_callback=self.hide_menu)
+        else:
+            self.hide_menu()
+            execute_action(item.action, item.value)
+
+    # ------------------------------------------------------------------
     # Error flash
     # ------------------------------------------------------------------
 
@@ -463,14 +723,20 @@ class KeymenuWindow(Gtk.ApplicationWindow):
         self,
         shortcuts_tree: "dict[str, ShortcutNode]",
         settings: "Settings",
+        commands: "list[Command] | None" = None,
     ) -> None:
         """Reset to root, reload content, and present the window."""
         self._shortcuts_tree = shortcuts_tree
         self._settings = settings
+        self._commands = commands or []
         self._nav_stack = []
         self._current_shortcuts = shortcuts_tree
         self._help_visible = False
         self._help_widget.set_visible(False)
+        self._search_mode = False
+        self._search_query = ""
+        self._search_results = []
+        self._search_selected = 0
 
         self._refresh_content()
 
