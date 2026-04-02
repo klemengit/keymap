@@ -192,6 +192,8 @@ def _flatten_shortcuts(
 _DESKTOP_DIRS = [
     Path("/usr/share/applications"),
     Path("/usr/local/share/applications"),
+    Path("/var/lib/flatpak/exports/share/applications"),
+    Path.home() / ".local/share/flatpak/exports/share/applications",
     Path.home() / ".local/share/applications",
 ]
 
