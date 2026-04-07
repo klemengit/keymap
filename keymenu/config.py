@@ -32,6 +32,7 @@ class Settings:
     width: int = 420
     desktop_apps: bool = True
     exclude_apps: list[str] = field(default_factory=list)
+    instant_search: bool = True
 
 
 @dataclass
@@ -128,6 +129,11 @@ def _parse_settings(raw: dict) -> Settings:
         if not isinstance(v, list) or not all(isinstance(s, str) for s in v):
             raise ConfigError("settings.exclude_apps must be a list of strings")
         settings.exclude_apps = v
+    if "instant_search" in raw:
+        v = raw["instant_search"]
+        if not isinstance(v, bool):
+            raise ConfigError("settings.instant_search must be a boolean")
+        settings.instant_search = v
     return settings
 
 

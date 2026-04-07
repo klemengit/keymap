@@ -563,8 +563,8 @@ class KeymenuWindow(Gtk.ApplicationWindow):
         node = self._current_shortcuts.get(char)
 
         if node is None:
-            # Unknown key — enter search with this character as the initial query
-            self._enter_search_mode(initial_query=char)
+            if self._settings is not None and self._settings.instant_search:
+                self._enter_search_mode(initial_query=char)
             return True
 
         if isinstance(node, ShortcutGroup):
